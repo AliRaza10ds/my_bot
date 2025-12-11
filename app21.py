@@ -7,7 +7,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain.agents import create_agent
 from langchain_core.tools import tool
 import re
-#from langchain_core.tracers.context import tracing_v2_enabled
+from langchain_core.tracers.context import tracing_v2_enabled
 
 load_dotenv()
 hotel_memory = {}  
@@ -165,12 +165,12 @@ def get_hotels(user_query: str):
 
         last_searched_hotel_id = all_hotels[0]["id"]
 
-        # RETURN ONLY light data to LLM
+        
         return {
             "status": True,
             "message": "Success",
             "total_hotels": len(all_hotels),
-            "hotels": all_hotels[:],  # first 5 only
+            "hotels": all_hotels[:], 
             "memory_updated": True
         }
 
@@ -394,7 +394,7 @@ def ask_question(user_question: str):
         conversation_history.append(AIMessage(content=error_msg))
         return error_msg
 '''
-MAX_HISTORY = 5  # sirf latest 5 messages rakhenge
+MAX_HISTORY = 5 
 
 def ask_question(user_question: str):
     global conversation_history, hotel_memory, last_searched_hotel_id
@@ -410,14 +410,12 @@ def ask_question(user_question: str):
         user_question = f"{user_question} [hotel_id:{hotel_id_ref}]"
         print(f"[DEBUG] Resolved reference to: {hotel_name} (ID: {hotel_id_ref})")
     
-    # Add user message to history
+   
     conversation_history.append(HumanMessage(content=user_question))
     
-    # Maintain sliding window: latest MAX_HISTORY messages
+    
     if len(conversation_history) > MAX_HISTORY:
         conversation_history = conversation_history[-MAX_HISTORY:]
-    
-    #with tracing_v2_enabled():
         try:
             response = agent.invoke({"messages": conversation_history})
             
@@ -435,14 +433,14 @@ def ask_question(user_question: str):
             else:
                 text_output = str(response)
             
-            # Add AI message to history
+            
             conversation_history.append(AIMessage(content=text_output))
             
-            # Again, maintain sliding window after AI message
+            
             if len(conversation_history) > MAX_HISTORY:
                 conversation_history = conversation_history[-MAX_HISTORY:]
             
-            # Remove internal hotel_id tags before showing to user
+            
             text_output = re.sub(r"\[hotel_id:\s*\d+\]", "", text_output).strip()
             
             return text_output
@@ -457,5 +455,4 @@ def ask_question(user_question: str):
 if __name__ == "__main__":
     query ="blue saphire"
     result = ask_question(query)
-
     print(f"Response: {result}")
