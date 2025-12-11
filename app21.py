@@ -7,7 +7,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain.agents import create_agent
 from langchain_core.tools import tool
 import re
-from langchain_core.tracers.context import tracing_v2_enabled
+#from langchain_core.tracers.context import tracing_v2_enabled
 
 load_dotenv()
 hotel_memory = {}  
@@ -417,7 +417,7 @@ def ask_question(user_question: str):
     if len(conversation_history) > MAX_HISTORY:
         conversation_history = conversation_history[-MAX_HISTORY:]
     
-    with tracing_v2_enabled():
+    #with tracing_v2_enabled():
         try:
             response = agent.invoke({"messages": conversation_history})
             
@@ -457,4 +457,5 @@ def ask_question(user_question: str):
 if __name__ == "__main__":
     query ="blue saphire"
     result = ask_question(query)
+
     print(f"Response: {result}")
