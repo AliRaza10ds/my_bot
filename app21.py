@@ -111,8 +111,8 @@ def get_hotels(user_query: str):
         params = {"search": user_query, "page":20,"per_page":page}
         try:
             response = requests.get(HOTEL_LIST_API, params=params, timeout=10)
-            #print(f"[DEBUG] 📥 Raw Response Status Code: {response.status_code}")
-            #print(f"[DEBUG] 📥 Raw Response Body:\n{response.text}\n")
+            print(f"[DEBUG] 📥 Raw Response Status Code: {response.status_code}")
+            print(f"[DEBUG] 📥 Raw Response Body:\n{response.text}\n")
             data = response.json()
         
 
@@ -142,7 +142,7 @@ def get_hotels(user_query: str):
             last_page = pagination.get("last_page", 1)
             print(f"[DEBUG] 📄 Pagination → Current: {current_page}, Last: {last_page}")
             if current_page >= last_page:
-                #print("[DEBUG] 🛑 Last page reached — stopping pagination")
+                print("[DEBUG] 🛑 Last page reached — stopping pagination")
                 break
             page += 1
 
@@ -165,12 +165,12 @@ def get_hotels(user_query: str):
 
         last_searched_hotel_id = all_hotels[0]["id"]
 
-        
+        # RETURN ONLY light data to LLM
         return {
             "status": True,
             "message": "Success",
             "total_hotels": len(all_hotels),
-            "hotels": all_hotels[:], 
+            "hotels": all_hotels[:],  # first 5 only
             "memory_updated": True
         }
 
@@ -272,7 +272,6 @@ AGENT ROLE: You are an expert hotel booking assistant for Ghumloo with PERFECT M
 
 I. CRITICAL CONTEXT RULES
 
-
 1. **Hotel Reference Resolution:**
    - When user says "iski price", "this hotel", "yeh wala", "same hotel" etc., you MUST check if a [hotel_id:XXX] is provided in their message
    - If [hotel_id:XXX] is present, use that ID directly for get_rate_plan - DO NOT call get_hotels again
@@ -326,6 +325,7 @@ III. ERROR HANDLIN
 - If dates missing: "Please provide check-in and check-out dates (YYYY-MM-DD)"
 - If hotel unclear: "Which hotel? Please mention name or option number"
 - If no results: "Sorry, no hotels found. Try different search terms?"
+
 """
 
 
@@ -394,11 +394,12 @@ def ask_question(user_question: str):
         conversation_history.append(AIMessage(content=error_msg))
         return error_msg
 '''
-MAX_HISTORY = 5 
+MAX_HISTORY = 5  # sirf latest 5 messages rakhenge
 
 def ask_question(user_question: str):
     global conversation_history, hotel_memory, last_searched_hotel_id
     
+    # Resolve hotel reference if mentioned
     hotel_id_ref = resolve_hotel_reference(user_question)
     
     if hotel_id_ref:
@@ -410,49 +411,53 @@ def ask_question(user_question: str):
         user_question = f"{user_question} [hotel_id:{hotel_id_ref}]"
         print(f"[DEBUG] Resolved reference to: {hotel_name} (ID: {hotel_id_ref})")
     
-   
+    # Add user message to history
     conversation_history.append(HumanMessage(content=user_question))
     
-    
+    # Maintain sliding window: latest MAX_HISTORY messages
     if len(conversation_history) > MAX_HISTORY:
         conversation_history = conversation_history[-MAX_HISTORY:]
-        try:
-            response = agent.invoke({"messages": conversation_history})
-            
-            text_output = ""
-            if isinstance(response, dict) and "messages" in response:
-                last_msg = response["messages"][-1]
-                
-                if isinstance(last_msg.content, list):
-                    for item in last_msg.content:
-                        if isinstance(item, dict) and item.get("type") == "text":
-                            text_output += item.get("text", "") + " "
-                    text_output = text_output.strip() if text_output else str(last_msg.content)
-                else:
-                    text_output = str(last_msg.content)
-            else:
-                text_output = str(response)
-            
-            
-            conversation_history.append(AIMessage(content=text_output))
-            
-            
-            if len(conversation_history) > MAX_HISTORY:
-                conversation_history = conversation_history[-MAX_HISTORY:]
-            
-            
-            text_output = re.sub(r"\[hotel_id:\s*\d+\]", "", text_output).strip()
-            
-            return text_output
+    
+    try:
+        # Call agent with conversation history
+        response = agent.invoke({"messages": conversation_history})
         
-        except Exception as e:
-            error_msg = f"Sorry, error occurred: {str(e)}"
-            conversation_history.append(AIMessage(content=error_msg))
-            return error_msg
+        text_output = ""
+        if isinstance(response, dict) and "messages" in response:
+            last_msg = response["messages"][-1]
+            
+            if isinstance(last_msg.content, list):
+                for item in last_msg.content:
+                    if isinstance(item, dict) and item.get("type") == "text":
+                        text_output += item.get("text", "") + " "
+                text_output = text_output.strip() if text_output else str(last_msg.content)
+            else:
+                text_output = str(last_msg.content)
+        else:
+            text_output = str(response)
+        
+        # Add AI message to history
+        conversation_history.append(AIMessage(content=text_output))
+        
+        # Again, maintain sliding window after AI message
+        if len(conversation_history) > MAX_HISTORY:
+            conversation_history = conversation_history[-MAX_HISTORY:]
+        
+        # Remove internal hotel_id tags before showing to user
+        text_output = re.sub(r"\[hotel_id:\s*\d+\]", "", text_output).strip()
+        
+        return text_output
+    
+    except Exception as e:
+        error_msg = f"Sorry, error occurred: {str(e)}"
+        conversation_history.append(AIMessage(content=error_msg))
+        return error_msg
+
+
 
 
 
 if __name__ == "__main__":
-    query ="blue saphire"
+    query ="checkin is tomorrow and checkout is one day after tomorrow check price"
     result = ask_question(query)
     print(f"Response: {result}")
